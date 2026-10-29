@@ -1,0 +1,118 @@
+"""Vinculação de casos: mesma parte, mesmo local e assunto semelhante.
+
+Cada vínculo informa o critério que o gerou, para que o servidor entenda por que
+os processos foram relacionados. A busca semântica com embeddings (fase 2)
+substitui o TF-IDF sem mudar a interface deste módulo.
+"""
+import re
+import unicodedata
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from .config import LIMIAR_SIMILARIDADE
+
+# Partes institucionais aparecem em quase todo processo e não indicam conexão.
+PARTES_INSTITUCIONAIS = {
+    "ministerio publico do estado do ceara",
+    "estado do ceara",
+    "municipio de fortaleza",
+    "defensoria publica do estado do ceara",
+    "justica publica",
+}
+
+# Locais ambientais do Ceará reconhecidos no texto (amostra para a demonstração).
+LOCAIS = [
+    "Lagoa da Parangaba", "Lagoa de Messejana", "Rio Cocó", "Rio Ceará", "Rio Maranguapinho",
+    "Riacho Pajeú", "Praia do Cumbuco", "Praia de Iracema", "Praia do Futuro", "Serra de Maranguape",
+    "Serra de Baturité", "Açude Castanhão", "Açude Orós", "Dunas do Cocó", "Parque do Cocó",
+    "Lagoa do Banana", "Jericoacoara", "Canoa Quebrada",
+]
+
+STOPWORDS = (
+    "a o e de da do das dos em no na nos nas para por com que se ao aos um uma os as "
+    "sua seu suas seus pelo pela pelos pelas mais como foi ser ter sob art lei fls autos "
+    "processo ministerio publico estado ceara requer requerido requerida autor reu acao"
+).split()
+
+
+def _norm(texto: str) -> str:
+    texto = unicodedata.normalize("NFD", texto.lower())
+    return "".join(c for c in texto if unicodedata.category(c) != "Mn").strip()
+
+
+def _doc(documento: str | None) -> str:
+    return re.sub(r"\D", "", documento or "")
+
+
+def locais_citados(texto: str) -> list[str]:
+    t = _norm(texto)
+    return [l for l in LOCAIS if _norm(l) in t]
+
+
+def _chaves_partes(processo: dict) -> dict[str, str]:
+    """Mapa chave->rótulo. Chave por documento (CPF/CNPJ) ou, sem documento, por nome."""
+    chaves = {}
+    for parte in processo.get("partes", []):
+        nome = parte["nome"]
+        if _norm(nome) in PARTES_INSTITUCIONAIS:
+            continue
+        doc = _doc(parte.get("documento"))
+        if doc:
+            chaves[f"doc:{doc}"] = f"{nome} ({parte['documento']})"
+        else:
+            chaves[f"nome:{_norm(nome)}"] = nome
+    return chaves
+
+
+def encontrar(processo: dict, acervo: list[dict], max_resultados: int = 6) -> dict:
+    """Devolve {"vinculos": [...], "semelhantes": [...]}.
+
+    Vínculo (forte): mesma parte, ou mesmo local com assunto semelhante — indica
+    conexão real entre os casos. Semelhante: só o assunto parece, útil para
+    reaproveitar entendimento e minutas.
+    """
+    outros = [p for p in acervo if p["numero"] != processo["numero"]]
+    if not outros:
+        return {"vinculos": [], "semelhantes": []}
+
+    achados: dict[str, dict] = {}
+
+    def add(numero: str, criterio: str, detalhe: str, peso: float):
+        v = achados.setdefault(numero, {"numero": numero, "criterios": [], "score": 0.0})
+        v["criterios"].append({"tipo": criterio, "detalhe": detalhe})
+        v["score"] += peso
+
+    minhas_partes = _chaves_partes(processo)
+    meus_locais = set(processo.get("locais") or locais_citados(processo.get("texto", "")))
+
+    for p in outros:
+        comuns = set(minhas_partes) & set(_chaves_partes(p))
+        for chave in comuns:
+            add(p["numero"], "mesma_parte", f"Mesma parte: {minhas_partes[chave]}", 1.0)
+        locais = meus_locais & set(p.get("locais") or [])
+        for local in sorted(locais):
+            add(p["numero"], "mesmo_local", f"Mesmo local: {local}", 0.8)
+
+    # Assunto semelhante: TF-IDF sobre a síntese dos fatos.
+    corpus = [processo.get("sintese", "")] + [p.get("sintese", "") for p in outros]
+    if any(corpus):
+        vet = TfidfVectorizer(stop_words=STOPWORDS, ngram_range=(1, 2), sublinear_tf=True, preprocessor=_norm)
+        matriz = vet.fit_transform(corpus)
+        sims = cosine_similarity(matriz[0], matriz[1:]).ravel()
+        for p, s in zip(outros, sims):
+            if s >= LIMIAR_SIMILARIDADE:
+                add(p["numero"], "assunto_semelhante", f"Assunto semelhante ({s:.0%} de similaridade)", float(s))
+
+    por_numero = {p["numero"]: p for p in outros}
+    vinculos, semelhantes = [], []
+    for v in sorted(achados.values(), key=lambda v: v["score"], reverse=True):
+        p = por_numero[v["numero"]]
+        v.update(classe=p.get("classe"), servidor=p.get("servidor"), assunto=p.get("assunto"),
+                 score=round(v["score"], 2))
+        tipos = {c["tipo"] for c in v["criterios"]}
+        if "mesma_parte" in tipos or {"mesmo_local", "assunto_semelhante"} <= tipos:
+            vinculos.append(v)
+        elif "assunto_semelhante" in tipos:
+            semelhantes.append(v)
+    return {"vinculos": vinculos[:max_resultados], "semelhantes": semelhantes[:3]}
