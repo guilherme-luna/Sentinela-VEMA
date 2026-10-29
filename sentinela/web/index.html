@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sentinela · Processo Judicial Eletrônico</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topo">
+  <button class="hamburguer" aria-label="Menu">☰</button>
+  <div class="marca">Sentinela <span>VEMA</span></div>
+  <div class="usuario">
+    <div>
+      <div class="nome">Gabinete VEMA</div>
+      <div class="acesso" id="ultimo-acesso">Ambiente de demonstração · dados fictícios</div>
+    </div>
+    <div class="avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>
+    </div>
+  </div>
+</header>
+
+<div class="corpo">
+  <nav class="lateral" aria-label="Navegação">
+    <button class="item ativo" data-aba="triagem" title="Triagem do dia" aria-label="Triagem do dia">
+      <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V21h-6v-6H9v6H3z"/></svg>
+    </button>
+    <button class="item" data-aba="acervo" title="Acervo distribuído" aria-label="Acervo distribuído">
+      <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4zm0 5h16v3H4zm0 5h16v3H4z"/></svg>
+    </button>
+    <button class="item" data-aba="auditoria" title="Auditoria" aria-label="Auditoria">
+      <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1-8.5 6H6a6.5 6.5 0 1 0 1.9-3.6L10 7.5H3.5V1l2.6 2.6A9 9 0 0 1 12 3zm-1 4h2v5.2l3.6 2.1-1 1.7L11 13.4z"/></svg>
+    </button>
+    <hr>
+    <button class="item" id="btn-reiniciar" title="Reiniciar demonstração" aria-label="Reiniciar demonstração">
+      <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+    </button>
+  </nav>
+
+  <main>
+    <!-- ================= TRIAGEM ================= -->
+    <section id="aba-triagem" class="aba">
+      <div class="paineis">
+        <div class="painel">
+          <div class="painel-cab">
+            <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Triagem do dia
+          </div>
+          <div class="painel-filtros" id="marco-info">Desde a última triagem aprovada</div>
+          <div class="painel-corpo acoes">
+            <div class="campo">
+              <span class="rotulo">Modo de distribuição</span>
+              <div class="segmentado" role="radiogroup" aria-label="Modo de distribuição">
+                <button class="seg ativo" data-modo="equilibrado" role="radio" aria-checked="true">Equilibrado</button>
+                <button class="seg" data-modo="paridade" role="radio" aria-checked="false">Par / ímpar</button>
+              </div>
+            </div>
+            <button class="btn primario" id="btn-triagem">Buscar processos do dia</button>
+            <button class="btn sucesso" id="btn-aprovar" disabled>Aprovar distribuição</button>
+            <a class="btn" id="btn-planilha" href="/api/planilha">Baixar planilha</a>
+          </div>
+        </div>
+
+        <div class="painel">
+          <div class="painel-cab">
+            <svg viewBox="0 0 24 24"><path d="M12 2 2.5 21h19zm-1 7h2v6h-2zm0 8h2v2h-2z"/></svg>Resumo da triagem
+          </div>
+          <div class="painel-filtros">Aguardando aprovação</div>
+          <ul class="painel-corpo contagens" id="kpis"></ul>
+        </div>
+
+        <div class="painel">
+          <div class="painel-cab">
+            <svg viewBox="0 0 24 24"><path d="M4 19h16v2H4zm1-3h3V9H5zm5 0h3V4h-3zm5 0h3v-5h-3z"/></svg>Carga por servidor
+          </div>
+          <div class="painel-filtros legenda">
+            <span><i class="amostra s1"></i>Acervo atual</span>
+            <span><i class="amostra s2"></i>Proposta de hoje</span>
+          </div>
+          <div class="painel-corpo">
+            <div id="grafico-carga" class="grafico-carga" role="img" aria-label="Carga de processos por servidor"></div>
+            <details class="tabela-alt"><summary>Ver como tabela</summary><table id="tabela-carga" class="tabela"></table></details>
+          </div>
+        </div>
+      </div>
+
+      <div class="mestre-detalhe">
+        <div class="lista-processos">
+          <div class="lista-titulo">
+            <span>[VEMA] Distribuição - Redistribuição - Analisar distribuição</span>
+            <span class="contador" id="contador-fila">0</span>
+          </div>
+          <div class="pesquisa">
+            <input id="busca-fila" type="search" placeholder="Pesquisar">
+          </div>
+          <div class="abas-lista" role="tablist">
+            <button class="aba-lista ativa" data-lista="processos" role="tab">Processos</button>
+            <button class="aba-lista" data-lista="duplicados" role="tab">Duplicados <span id="qtd-dup"></span></button>
+          </div>
+          <div id="lista-fila" class="cards"></div>
+          <div id="lista-duplicados" class="cards" hidden></div>
+        </div>
+        <div class="detalhe" id="detalhe">
+          <p class="placeholder">Aqui será exibido o processo selecionado</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= ACERVO ================= -->
+    <section id="aba-acervo" class="aba" hidden>
+      <div class="painel">
+        <div class="painel-cab">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4zm0 5h16v3H4zm0 5h16v3H4z"/></svg>Acervo distribuído
+        </div>
+        <div class="painel-filtros filtros">
+          <input id="busca-acervo" type="search" placeholder="Número, classe, parte ou local">
+          <select id="filtro-servidor"><option value="">Todos os servidores</option></select>
+        </div>
+        <div class="painel-corpo sem-pad">
+          <table id="tabela-acervo" class="tabela listrada">
+            <thead><tr><th>Processo</th><th>Classe</th><th>Parte(s)</th><th>Local</th><th>Etiqueta</th><th>Recebido</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= AUDITORIA ================= -->
+    <section id="aba-auditoria" class="aba" hidden>
+      <div class="painel">
+        <div class="painel-cab">
+          <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18zm-1 4v6l5 3 1-1.7-4-2.4V7z"/></svg>Registro de auditoria
+        </div>
+        <div class="painel-filtros">Toda ação do sistema e dos usuários fica registrada</div>
+        <div class="painel-corpo sem-pad">
+          <table id="tabela-auditoria" class="tabela listrada"><thead><tr><th>Quando</th><th>Ação</th><th>Detalhe</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<div id="toast" class="toast" role="status" hidden></div>
+<script src="app.js"></script>
+</body>
+</html>
