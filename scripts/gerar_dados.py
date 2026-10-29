@@ -7,7 +7,9 @@ Saídas em dados/:
 
 Casos plantados para o roteiro da demo: tutelas de urgência, réu preso, idoso,
 etiqueta de réu preso errada, duplicados, apensos, mesma parte com conduta
-repetida e vários processos sobre a Lagoa da Parangaba.
+repetida e vários processos sobre a Lagoa da Parangaba. Os processos do acervo
+trazem a decisão registrada pela vara (coluna PROVIDÊNCIA da planilha), base dos
+padrões decisórios.
 Semente fixa: a base gerada é sempre a mesma.
 """
 import json
@@ -21,11 +23,12 @@ import pymupdf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import cnj  # noqa: E402
-from app.config import ACERVO_INICIAL_PATH, DADOS_DIR, FILA_PJE_PATH, PDF_DIR, SERVIDORES  # noqa: E402
+from app.config import (ACERVO_INICIAL_PATH, DADOS_DIR, FILA_PJE_PATH, MARCO_INICIAL, PDF_DIR,  # noqa: E402
+                        SERVIDORES)
 
 rnd = random.Random(2026)
-HOJE = datetime(2026, 10, 28)
-MARCO = datetime(2026, 10, 27, 18, 0)  # última triagem aprovada
+rnd_dec = random.Random(309)  # semente própria: decisões não alteram os números já usados na demo
+MARCO = datetime.fromisoformat(MARCO_INICIAL)  # última triagem aprovada
 
 MP = {"nome": "Ministério Público do Estado do Ceará", "documento": None, "polo": "ativo"}
 ESTADO = {"nome": "Estado do Ceará", "documento": None, "polo": "passivo"}
@@ -141,9 +144,62 @@ def montar_processo(modelo: str, *, reu=None, local=None, classe=None, data_entr
         "metadados": {"reu_preso": False, "prioridade_idoso": False, "pedido_liminar": False},
         "locais": [local] if local else [],
         "sintese": sintese,
+        "_modelo": modelo,
         "_direito": extras_direito,
         "_pedidos": extras_pedidos,
     }
+
+
+# Decisões que a vara costuma tomar em cada tipo de caso (fictícias, com frequências
+# plausíveis), para que o acervo tenha padrões decisórios a revelar.
+LIMINAR_INDEFERIDA = ("Liminar indeferida", "Indeferida a liminar por falta de prova técnica conclusiva; determinada perícia.")
+DECISOES_CIVEIS = {
+    "poluicao_lagoa": [(6, "Liminar deferida", "Determinada a interrupção imediata do lançamento de efluentes, sob multa diária."),
+                       (3, "TAC homologado", "Homologado acordo com prazo de 120 dias para instalar estação de tratamento."),
+                       (1, *LIMINAR_INDEFERIDA)],
+    "app_construcao": [(5, "Liminar deferida", "Embargada a obra e proibida nova supressão de vegetação na APP."),
+                       (3, "Sentença procedente", "Condenação à demolição e à recuperação da APP com plano aprovado pela SEMACE."),
+                       (2, *LIMINAR_INDEFERIDA)],
+    "evento_dunas": [(7, "Liminar deferida", "Suspenso o evento e determinada a retirada das estruturas sobre as dunas."),
+                     (3, "TAC homologado", "Evento transferido para área licenciada, conforme acordo com o MP.")],
+    "desmatamento": [(5, "Liminar deferida", "Embargada a área e proibido novo desmate, com monitoramento por satélite."),
+                     (3, "Sentença procedente", "Condenação a recompor a vegetação nativa e a indenizar o dano.")],
+    "ruido": [(5, "TAC homologado", "Acordo para isolamento acústico e funcionamento até 22h."),
+              (3, "Liminar deferida", "Limitado o funcionamento do estabelecimento até 22h."),
+              (2, *LIMINAR_INDEFERIDA)],
+}
+DECISOES_CRIMINAIS = {
+    "maus_tratos": [(5, "Transação penal", "Aceita transação penal com prestação de serviços em abrigo de animais."),
+                    (4, "Denúncia recebida", "Recebida a denúncia pelo art. 32 da Lei 9.605/98."),
+                    (1, "Arquivamento", "Arquivado a pedido do MP por insuficiência de provas.")],
+    "fauna_silvestre": [(5, "Denúncia recebida", "Recebida a denúncia; aves encaminhadas ao CETAS."),
+                        (4, "Transação penal", "Aceita transação penal com doação a entidade ambiental."),
+                        (1, "Arquivamento", "Arquivado a pedido do MP por insuficiência de provas.")],
+    "pesca": [(6, "Denúncia recebida", "Recebida a denúncia por pesca em período de defeso."),
+              (3, "Liberdade provisória", "Concedida liberdade provisória com proibição de frequentar o açude."),
+              (1, "Arquivamento", "Arquivado a pedido do MP por insuficiência de provas.")],
+}
+DECISOES_CRIMINAIS_PADRAO = [(5, "Denúncia recebida", "Recebida a denúncia pelo crime ambiental apurado."),
+                             (3, "Arquivamento", "Arquivado a pedido do MP por insuficiência de provas."),
+                             (2, "Transação penal", "Aceita transação penal com prestação pecuniária.")]
+
+
+def decidir(p: dict, tipo: str | None = None) -> dict | None:
+    """Decisão registrada pela vara; processos recentes ainda aguardam análise."""
+    entrada = datetime.fromisoformat(p["data_entrada"])
+    if (MARCO - entrada).days < 20 or (tipo is None and rnd_dec.random() < 0.12):
+        return None
+    if p["competencia"] == "Criminal":
+        opcoes = DECISOES_CRIMINAIS.get(p["_modelo"], DECISOES_CRIMINAIS_PADRAO)
+    else:
+        opcoes = DECISOES_CIVEIS.get(p["_modelo"], DECISOES_CIVEIS["app_construcao"])
+    if tipo:
+        escolha = next(o for o in opcoes if o[1] == tipo)
+    else:
+        escolha = rnd_dec.choices(opcoes, weights=[o[0] for o in opcoes])[0]
+    prazo = rnd_dec.randint(4, min(45, (MARCO - entrada).days - 2))  # sempre antes da última triagem
+    quando = entrada + timedelta(days=prazo, hours=rnd_dec.randint(1, 6))
+    return {"tipo": escolha[1], "resumo": escolha[2], "data": quando.isoformat(timespec="minutes")}
 
 
 def escrever_pdf(p: dict):
@@ -210,6 +266,11 @@ def acervo_inicial() -> list[dict]:
         s = min(SERVIDORES, key=lambda s: ((carga[s.nome] + 1) / s.peso, s.nome))
         carga[s.nome] += 1
         p["servidor"] = s.nome
+
+    # Decisões já registradas. A lavanderia reincidente teve a liminar deferida nas duas vezes.
+    for p in acervo:
+        reincidente = LAVANDERIA in p["partes"]
+        p["decisao"] = decidir(p, "Liminar deferida" if reincidente else None)
     return acervo
 
 
@@ -278,6 +339,7 @@ def fila_do_dia(acervo: list[dict]) -> list[dict]:
     for p in rnd.sample(acervo[:100], 4):
         dup = {**p, "data_entrada": next(t).isoformat(timespec="minutes")}
         dup.pop("servidor", None)
+        dup.pop("decisao", None)
         fila.append(dup)
 
     rnd.shuffle(fila)
@@ -286,7 +348,7 @@ def fila_do_dia(acervo: list[dict]) -> list[dict]:
         p["data_entrada"] = h
 
     # Itens antigos ainda visíveis na tarefa (já triados antes do marco): a extração incremental os ignora
-    antigos = [{k: v for k, v in p.items() if k != "servidor"} for p in acervo[-10:]]
+    antigos = [{k: v for k, v in p.items() if k not in ("servidor", "decisao")} for p in acervo[-10:]]
     return antigos + fila
 
 

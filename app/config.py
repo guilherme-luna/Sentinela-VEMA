@@ -30,6 +30,10 @@ SERVIDORES: list[Servidor] = [
     Servidor("Elisa", 0.6, "impar"),
 ]
 
+# Ponto de partida da extração incremental na base de demonstração
+# (última triagem aprovada antes da fila do dia gerada pelo script).
+MARCO_INICIAL = "2026-10-27T18:00"
+
 # Modo de distribuição padrão: "equilibrado" (rodízio ponderado) ou "paridade".
 MODO_DISTRIBUICAO = "equilibrado"
 

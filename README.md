@@ -4,24 +4,57 @@
 Hackathon TJCE/UFC — Desafio 2.3.
 
 Todo dia o Sentinela lê os processos que chegaram à VEMA, **avisa o que é urgente**,
-**distribui para o servidor certo**, **mostra os casos ligados** e **preenche sozinho a
-planilha** que a equipe já usa, sem alterar o PJe.
+**distribui para o servidor certo**, **mostra os casos semelhantes e o que a vara já decidiu
+neles** e **preenche sozinho a planilha** que a equipe já usa, sem alterar o PJe.
+
+**Como atende ao objetivo do desafio 2.3**
+
+| O desafio pede | O Sentinela entrega |
+|---|---|
+| Organização do acervo | Triagem incremental, distribuição pelas regras da vara e planilha preenchida na aprovação |
+| Identificar casos semelhantes | Vínculos por mesma parte (CPF/CNPJ) e mesmo local, mais casos com assunto semelhante |
+| Padrões decisórios | O que a vara decidiu nos casos parecidos com cada processo novo, e a tela **Padrões do acervo** |
+| Informações repetidas | Duplicados barrados, conduta repetida da mesma parte, fim da digitação dupla PJe → planilha |
+| Eficiência e menos retrabalho | Um clique no lugar da digitação; entendimento e minutas reaproveitados |
 
 > ⚠️ Esta demonstração usa apenas **dados fictícios** gerados por script. Nenhum dado real de processo.
 
 ## Como rodar
 
-**Windows:** dê dois cliques em `iniciar.bat`. O painel abre em http://localhost:8000.
+Pré-requisito: **Python 3.10 ou superior** ([python.org](https://www.python.org/downloads/);
+no Windows, marque **"Add Python to PATH"** na instalação). Na primeira execução é preciso internet
+para baixar as bibliotecas.
 
-Manualmente:
+| Sistema | Como iniciar |
+|---|---|
+| **Windows** | Dois cliques em `iniciar.bat` |
+| **Mac / Linux** | `sh iniciar.sh` no terminal |
+
+O painel abre em **http://localhost:8000**. Os scripts criam o ambiente, instalam ou corrigem as
+dependências e geram a base fictícia quando ela não existe. Pode rodar quantas vezes quiser.
+
+<details>
+<summary>Comandos manuais</summary>
 
 ```bash
 python -m venv .venv
-.venv\Scripts\python -m pip install -r requirements.txt
-.venv\Scripts\python scripts\gerar_dados.py      # base fictícia (sempre igual)
-.venv\Scripts\python -m uvicorn app.main:app --port 8000
-.venv\Scripts\python -m pytest                   # testes das regras
+# Windows: .venv\Scripts\python   |   Mac/Linux: .venv/bin/python
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python scripts/gerar_dados.py               # base fictícia (sempre igual)
+.venv/bin/python -m uvicorn app.main:app --port 8000
+.venv/bin/python -m pytest                            # 29 testes de regras e fluxo
 ```
+</details>
+
+### Problemas comuns
+
+| Sintoma | Solução |
+|---|---|
+| "Python 3.10 ou superior não encontrado" ou o Windows abre a Microsoft Store | Instale pelo python.org marcando **Add Python to PATH** e abra uma nova janela |
+| A preparação falhou no meio (internet caiu) | Rode o script de novo; ele completa o que faltou. Se persistir, apague a pasta `.venv` |
+| "Address already in use" / porta 8000 ocupada | Feche outra instância do Sentinela ou troque `--port 8000` por outra porta |
+| "A planilha está aberta em outro programa" ao aprovar | Feche o arquivo no Excel e clique em **Aprovar distribuição** de novo; nada foi gravado |
+| Quero voltar a demo ao início | Ícone **↺** no menu lateral (Reiniciar demonstração) |
 
 ## O problema (entrevista com a VEMA, 05/10/2026)
 
@@ -34,6 +67,7 @@ python -m venv .venv
 | Processo repetido ou perdido na planilha | Bloqueia duplicados e valida o dígito verificador CNJ |
 | Distribuição manual com regras (pesos, apensos, par/ímpar) | Distribuidor com as regras da vara, configurável |
 | "Já esqueci o que fiz na semana passada" (mais de mil processos) | Vínculos por mesma parte e mesmo local + casos semelhantes |
+| Cada servidor decide casos parecidos sem ver o que os colegas já decidiram | Padrão decisório da vara ao lado de cada processo e por assunto |
 
 ## Um dia de trabalho na VEMA com o Sentinela
 
@@ -116,10 +150,12 @@ A aba **Duplicados** lista o que foi barrado: *"Já distribuído para Elisa"*. N
 **Quem:** servidor / assistente · **Antes:** "quando encontro a Maria de novo, já esqueci o que fiz semana passada".
 
 1. O servidor vê seus processos na planilha, como já faz hoje, ou no **Acervo distribuído**, filtrando pelo próprio nome.
-2. Ao abrir um processo, encontra:
-   - **Processos vinculados**: mesma parte (pelo CPF/CNPJ, mesmo com o nome escrito diferente) ou mesmo local (ex.: *Lagoa da Parangaba*), com o nome de quem está com cada um;
-   - **Casos semelhantes**: assuntos parecidos, para reaproveitar entendimento e minutas;
-   - **Síntese dos fatos**, extraída da petição, e o link para o PDF.
+2. Ao abrir um processo, logo abaixo da prioridade, encontra **Casos semelhantes e o que a vara decidiu**:
+   - o **padrão**: *"Em 5 de 6 casos parecidos já decididos, a vara decidiu: Liminar deferida"*, com a distribuição das decisões;
+   - **Mesma parte ou mesmo local**: mesma parte (pelo CPF/CNPJ, mesmo com o nome escrito diferente) ou mesmo local (ex.: *Lagoa da Parangaba*), com o nome de quem está com cada um;
+   - **Assunto semelhante**: casos parecidos, para reaproveitar entendimento e minutas;
+   - em cada caso relacionado, **a decisão registrada**, a data e o resumo;
+   - mais abaixo, a **síntese dos fatos**, extraída da petição, e o link para o PDF.
 3. Com isso, a conduta repetida (o 4º processo da mesma pessoa por maus-tratos) e os conflitos do mesmo território aparecem **antes** da análise, não por acaso.
 
 ### 6. Acompanhamento da gestão
@@ -127,7 +163,8 @@ A aba **Duplicados** lista o que foi barrado: *"Já distribuído para Elisa"*. N
 **Quem:** gestão
 
 - **Carga por servidor**: se a divisão está igualitária, respeitando quem trabalha 3 dias.
-- **Acervo distribuído**: busca por número, classe, parte ou local em todo o acervo da vara.
+- **Padrões do acervo** (ícone da balança): para cada assunto, como a vara costuma decidir, em quanto tempo e as decisões mais recentes. Clicar numa decisão abre a lista desses processos.
+- **Acervo distribuído**: busca por número, classe, parte ou local, com filtros por servidor, **assunto** e **decisão**.
 - **Auditoria**: quem buscou, quem mudou etiqueta, quem aprovou e quando.
 
 ### Antes e depois
@@ -140,6 +177,7 @@ A aba **Duplicados** lista o que foi barrado: *"Já distribuído para Elisa"*. N
 | Evitar repetidos | Torcer para lembrar | Duplicados bloqueados automaticamente |
 | Planilha | Digitar duas vezes | Preenchida na aprovação |
 | Lembrar casos ligados | Memória de cada servidor | Vínculos mostrados ao abrir o processo |
+| Saber como a vara decide | Perguntar a um colega ou procurar minutas antigas | Padrão decisório ao lado do processo |
 
 > **O Sentinela nunca decide sozinho.** Ele propõe, mostra a prova e o motivo, e uma pessoa aprova.
 
@@ -151,6 +189,7 @@ A aba **Duplicados** lista o que foi barrado: *"Já distribuído para Elisa"*. N
                                                   │  2. Detector de urgência (regras + metadados)
                                                   │  3. Distribuidor (regras da vara)
                                                   │  4. Vínculos (partes, locais, similaridade)
+                                                  │  5. Padrões decisórios (decisões registradas)
                                                   ▼
                                       Banco + Painel web (aprovação humana)
 ```
@@ -172,14 +211,16 @@ app/
   urgencia.py          detector de tutela/liminar, réu preso e idoso, com evidência
   distribuidor.py      rodízio ponderado, apensos, modo par/ímpar
   vinculos.py          mesma parte (CPF/CNPJ), mesmo local, assunto semelhante
+  padroes.py           padrão decisório dos casos parecidos e quadro por assunto
   servico.py           fluxo: extrair → deduplicar → analisar → propor → aprovar
-  planilha.py          "01 - Controle de Acervo" (abas por servidor + Unificada)
+  planilha.py          "01 - Controle de Acervo": acrescenta linhas sem apagar anotações
   repositorio.py       persistência (SQLite no MVP; PostgreSQL + pgvector na fase 2)
   conectores/          PJe simulado (MVP) e PJe via MNI (fase 2)
   main.py              API FastAPI + painel
 web/                   painel (HTML/CSS/JS)
 scripts/gerar_dados.py base fictícia com os casos do roteiro
-tests/                 testes das regras críticas
+tests/                 regras críticas, fluxo completo e padrões decisórios
+iniciar.bat / .sh      sobe tudo com um comando (Windows / Mac e Linux)
 ```
 
 ## Roteiro da demonstração (3 min)
@@ -191,7 +232,9 @@ tests/                 testes das regras críticas
 4. Mostrar o **"Réu preso (conferir)"**: a etiqueta do PJe não bate com o texto.
 5. Mostrar o **pedido de relaxamento de prisão**: foi para o mesmo servidor do processo principal.
 6. Abrir o caso da **Maria do Socorro**: 4º processo por maus-tratos, conduta repetida.
-7. **Aprovar distribuição** e abrir a **planilha**: abas preenchidas, coluna de urgência colorida.
+7. Voltar à tutela da Lagoa: **"Em 5 de 6 casos parecidos, a vara deferiu a liminar"**, com as decisões
+   anteriores da mesma empresa. Abrir **Padrões do acervo** e clicar em *Poluição → Liminar deferida*.
+8. **Aprovar distribuição** e abrir a **planilha**: abas preenchidas, coluna de urgência colorida.
 
 ## Próximos passos (até o Demo Day e após aprovação)
 
@@ -201,3 +244,14 @@ tests/                 testes das regras críticas
 - [ ] **Modelo de linguagem local** (Ollama) para confirmar urgências e resumir peças longas
 - [ ] OCR para PDFs digitalizados; alerta de revisão de prisão a cada 90 dias
 - [ ] Card do Sentinela dentro do painel do PJe
+- [ ] Login integrado ao do tribunal (o MVP não tem autenticação) e perfis triagem / servidor / gestão
+- [ ] Ler as decisões reais da coluna **PROVIDÊNCIA** da planilha e dos movimentos do PJe (no MVP, as decisões são fictícias)
+
+### Implementações futuras para aprofundar o desafio 2.3
+
+- [ ] **Informações repetidas no painel:** ranking das partes e dos locais que mais se repetem no acervo
+  (condutas reincidentes, territórios como a Lagoa da Parangaba), com alerta quando um novo processo entra nesse grupo.
+- [ ] **Análise do acervo inteiro:** busca por similaridade em todos os processos, inclusive os antigos
+  (hoje vínculos e casos semelhantes são calculados para os processos que chegam na triagem).
+- [ ] **Medidor de retrabalho evitado:** linhas da planilha que não precisaram ser digitadas,
+  duplicados barrados e decisões reaproveitadas, por dia e por mês.

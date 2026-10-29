@@ -45,6 +45,7 @@ function toast(msg, erro = false) {
 // ---------- prioridade: pílula com ícone + rótulo, nunca só cor ----------
 const ICONES = { 1: "▲", 2: "◆", 3: "●" };
 const CURTO = { tutela_urgencia: "Tutela/liminar", reu_preso: "Réu preso", idoso: "Idoso" };
+const ICONE_BALANCA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3h2v2.1l5.5 1.4-.5 1.9-1.3-.3L19.5 14a3.5 3.5 0 0 1-7 0l2.6-6.4L13 7.1V19h4v2H7v-2h4V7.1l-2.1.5L11.5 14a3.5 3.5 0 0 1-7 0l2.8-6-1.3.3-.5-1.9L11 5.1zM8 9.6 6.4 13.5h3.2zm8 0-1.6 3.9h3.2z"/></svg>';
 const nivelDe = (p) => Math.min(...(p.alertas || []).map((a) => a.nivel), 9);
 
 function pilula(a) {
@@ -101,7 +102,7 @@ function card(p) {
   return `<div class="card${n < 9 ? " n" + n : ""}${p.numero === selecionado ? " selecionado" : ""}" data-numero="${esc(p.numero)}" tabindex="0">
     <div class="card-topo">
       <a href="#" class="num-link">${esc(sigla(p.classe))} ${esc(p.numero)}</a>
-      <span class="pilulas">${(p.alertas || []).map(pilula).join("")}${p.vinculos ? `<span class="pilula cinza" title="Processos vinculados">🔗 ${p.vinculos}</span>` : ""}</span>
+      <span class="pilulas">${(p.alertas || []).map(pilula).join("")}${p.vinculos ? `<span class="pilula cinza" title="Processos vinculados">🔗 ${p.vinculos}</span>` : ""}${p.semelhantes_decididos ? `<span class="pilula decidido" title="Casos semelhantes já decididos pela vara">${ICONE_BALANCA} ${p.semelhantes_decididos}</span>` : ""}</span>
     </div>
     <div class="assunto">${esc(p.assunto)}</div>
     <div class="orgao">${ORGAO}</div>
@@ -148,10 +149,37 @@ async function atualizarTriagem() {
 }
 
 // ---------- detalhe (painel da direita) ----------
+function decisaoHtml(d) {
+  return d
+    ? `<div class="decisao"><span class="dec-tipo">${esc(d.tipo)}</span><span class="orgao">em ${dataBR(d.data)}</span><div class="dec-resumo">${esc(d.resumo)}</div></div>`
+    : '<div class="decisao pendente">Ainda sem decisão registrada</div>';
+}
+
 function relacionado(v) {
   return `<div class="relacionado">
     <div class="cab"><a href="#" data-abrir="${esc(v.numero)}">${esc(sigla(v.classe))} ${esc(v.numero)}</a><span>etiqueta: ${esc(v.servidor || "—")}</span></div>
     ${v.criterios.map((c) => `<span class="criterio">${esc(c.detalhe)}</span>`).join("")}
+    ${decisaoHtml(v.decisao)}
+  </div>`;
+}
+
+// Barras de distribuição das decisões: uma série só, a magnitude é o que importa.
+function barrasDecisao(distribuicao, total, assunto) {
+  return `<div class="barras-dec">${distribuicao.map((d) => `
+    <div class="linha-dec${assunto ? " clicavel" : ""}" data-tip="${esc(d.tipo)}: ${d.n} de ${total} (${Math.round((d.n / total) * 100)}%)"
+      ${assunto ? `data-filtrar-assunto="${esc(assunto)}" data-filtrar-decisao="${esc(d.tipo)}" tabindex="0" role="button"` : ""}>
+      <span class="nome">${esc(d.tipo)}</span>
+      <div class="trilho"><div class="seg-barra s1 so" style="width:${(d.n / total) * 100}%"></div></div>
+      <span class="total">${d.n}</span>
+    </div>`).join("")}</div>`;
+}
+
+function padraoHtml(pd) {
+  if (!pd) return '<p class="nada">Nenhum caso parecido com decisão registrada ainda.</p>';
+  return `<div class="padrao">
+    <p class="padrao-frase">Em <b>${pd.vezes} de ${pd.decididos}</b> casos parecidos já decididos, a vara decidiu: <b>${esc(pd.predominante)}</b>.</p>
+    ${barrasDecisao(pd.distribuicao, pd.decididos)}
+    <p class="aviso">Histórico da própria vara, para reaproveitar entendimento e minutas. Quem decide é o juiz.</p>
   </div>`;
 }
 
@@ -170,20 +198,24 @@ async function abrirDetalhe(numero) {
       <div class="sub">${esc(p.classe)} · ${esc(p.assunto)} · ${esc(p.competencia)}</div>
     </div>
     <div class="det-bloco"><h3>Prioridade</h3>${alertas}</div>
+    <div class="det-bloco destaque"><h3>Casos semelhantes e o que a vara decidiu <span class="qtd">(${vinc.length + sem.length})</span></h3>
+      ${padraoHtml(p.padrao)}
+      <h4>Mesma parte ou mesmo local <span class="qtd">(${vinc.length})</span></h4>
+      ${vinc.map(relacionado).join("") || '<p class="nada">Nenhum processo com a mesma parte ou o mesmo local.</p>'}
+      <h4>Assunto semelhante <span class="qtd">(${sem.length})</span></h4>
+      ${sem.map(relacionado).join("") || '<p class="nada">Nenhum caso com assunto semelhante.</p>'}
+    </div>
     <div class="det-bloco"><h3>Distribuição${p.status === "proposta" ? " proposta" : ""}</h3>
       <dl class="grade-info">
         <dt>Etiqueta</dt><dd><span class="etiqueta fixa">${esc(p.servidor || "—")}</span></dd>
         <dt>Motivo</dt><dd>${esc(p.motivo_distribuicao || "Distribuição anterior")}</dd>
         ${p.apenso_de ? `<dt>Apenso de</dt><dd><a href="#" data-abrir="${esc(p.apenso_de)}">${esc(p.apenso_de)}</a></dd>` : ""}
         <dt>Recebido em</dt><dd>${dataHoraBR(p.data_entrada)}</dd>
+        ${p.status === "acervo" ? `<dt>Decisão</dt><dd>${p.decisao ? `${esc(p.decisao.tipo)} em ${dataBR(p.decisao.data)}` : "Ainda sem decisão registrada"}</dd>` : ""}
         <dt>Local</dt><dd>${(p.locais || []).map(esc).join(", ") || "—"}</dd>
       </dl></div>
     <div class="det-bloco"><h3>Partes</h3>
       ${p.partes.map((x) => `<div>${esc(x.nome)}${x.documento ? ` <span class="orgao">(${esc(x.documento)})</span>` : ""} <span class="orgao">· polo ${esc(x.polo)}</span></div>`).join("")}</div>
-    <div class="det-bloco"><h3>Processos vinculados <span class="qtd">(${vinc.length})</span></h3>
-      ${vinc.map(relacionado).join("") || '<p class="nada">Nenhum processo com a mesma parte ou o mesmo local.</p>'}</div>
-    <div class="det-bloco"><h3>Casos semelhantes, para reaproveitar entendimento <span class="qtd">(${sem.length})</span></h3>
-      ${sem.map(relacionado).join("") || '<p class="nada">Nenhum caso semelhante encontrado.</p>'}</div>
     <div class="det-bloco"><h3>Síntese dos fatos (extraída da petição)</h3><p class="sintese">${esc(p.sintese)}</p></div>
     <div class="det-acoes"><a class="btn" href="${pdf}" target="_blank">Abrir petição (PDF)</a></div>`;
   $("#detalhe").scrollTop = 0;
@@ -191,30 +223,62 @@ async function abrirDetalhe(numero) {
 
 // ---------- acervo e auditoria ----------
 let acervoCache = [];
-async function carregarAcervo() {
+const SEM_DECISAO = "Ainda sem decisão";
+
+function preencherOpcoes(sel, valores, primeira) {
+  const atual = sel.value;
+  sel.innerHTML = `<option value="">${primeira}</option>` + valores.map((v) => `<option>${esc(v)}</option>`).join("");
+  sel.value = valores.includes(atual) ? atual : "";
+}
+
+async function carregarAcervo(filtro = {}) {
   acervoCache = await api("/api/acervo");
+  const unicos = (f) => [...new Set(acervoCache.map(f))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  preencherOpcoes($("#filtro-assunto"), unicos((p) => p.assunto), "Todos os assuntos");
+  preencherOpcoes($("#filtro-decisao"), [...unicos((p) => p.decisao?.tipo || SEM_DECISAO)], "Todas as decisões");
+  if (filtro.assunto !== undefined) $("#filtro-assunto").value = filtro.assunto;
+  if (filtro.decisao !== undefined) $("#filtro-decisao").value = filtro.decisao;
   filtrarAcervo();
 }
 function filtrarAcervo() {
   const q = semAcento($("#busca-acervo").value);
   const srv = $("#filtro-servidor").value;
-  const linhas = acervoCache.filter((p) => (!srv || p.servidor === srv) &&
+  const assunto = $("#filtro-assunto").value;
+  const decisao = $("#filtro-decisao").value;
+  const linhas = acervoCache.filter((p) => (!srv || p.servidor === srv) && (!assunto || p.assunto === assunto) &&
+    (!decisao || (p.decisao?.tipo || SEM_DECISAO) === decisao) &&
     (!q || semAcento([p.numero, p.classe, p.assunto, ...p.partes, ...(p.locais || [])].join(" ")).includes(q)));
   $("#tabela-acervo tbody").innerHTML = linhas.slice(0, 300).map((p) => `<tr data-numero="${esc(p.numero)}">
     <td class="num">${esc(sigla(p.classe))} ${esc(p.numero)}</td><td>${esc(p.classe)}</td><td>${p.partes.map(esc).join("<br>")}</td>
-    <td>${(p.locais || []).map(esc).join(", ") || "—"}</td><td><span class="etiqueta fixa">${esc(p.servidor)}</span></td><td>${dataBR(p.data_entrada)}</td></tr>`).join("");
+    <td>${(p.locais || []).map(esc).join(", ") || "—"}</td>
+    <td>${p.decisao ? `<b>${esc(p.decisao.tipo)}</b><br><span class="orgao">${dataBR(p.decisao.data)}</span>` : '<span class="orgao">—</span>'}</td>
+    <td><span class="etiqueta fixa">${esc(p.servidor)}</span></td><td>${dataBR(p.data_entrada)}</td></tr>`).join("")
+    || '<tr><td colspan="7" class="vazio">Nenhum processo encontrado com esses filtros.</td></tr>';
 }
+async function carregarPadroes() {
+  const quadro = await api("/api/padroes");
+  $("#grade-padroes").innerHTML = quadro.map((g) => `<div class="cartao-padrao">
+    <h3>${esc(g.assunto)}</h3>
+    <p class="meta">${g.total} processos · ${g.decididos} com decisão${g.dias_ate_decisao != null ? ` · metade decidida em até ${g.dias_ate_decisao} dias` : ""}</p>
+    ${g.decididos ? barrasDecisao(g.distribuicao, g.decididos, g.assunto) : '<p class="nada">Nenhuma decisão registrada ainda.</p>'}
+    ${g.recentes.length ? `<h4>Decisões mais recentes</h4>${g.recentes.map((r) => `<div class="rec">
+      <div class="cab"><a href="#" data-abrir="${esc(r.numero)}">${esc(sigla(r.classe))} ${esc(r.numero)}</a><span>etiqueta: ${esc(r.servidor || "—")}</span></div>
+      ${decisaoHtml(r)}</div>`).join("")}` : ""}
+  </div>`).join("");
+}
+
 async function carregarAuditoria() {
   const linhas = await api("/api/auditoria");
   $("#tabela-auditoria tbody").innerHTML = linhas.map((l) =>
     `<tr><td>${dataHoraBR(l.quando)}</td><td>${esc(l.acao)}</td><td>${esc(l.detalhe)}</td></tr>`).join("");
 }
 
-function mostrarAba(nome) {
+function mostrarAba(nome, filtro) {
   $$(".lateral .item[data-aba]").forEach((x) => x.classList.toggle("ativo", x.dataset.aba === nome));
   $$("main > .aba").forEach((s) => (s.hidden = s.id !== "aba-" + nome));
-  if (nome === "acervo") carregarAcervo();
+  if (nome === "acervo") carregarAcervo(filtro);
   if (nome === "auditoria") carregarAuditoria();
+  if (nome === "padroes") carregarPadroes();
   if (nome === "triagem") atualizarTriagem();
 }
 
@@ -240,14 +304,22 @@ async function comCarregando(botao, fn) {
   finally { botao.classList.remove("carregando"); botao.innerHTML = texto; }
 }
 
-$("#btn-triagem").addEventListener("click", (ev) => comCarregando(ev.currentTarget, async () => {
+$("#btn-triagem").addEventListener("click", (ev) => {
+  if (fila.length && !confirm("Há uma distribuição aguardando aprovação. Buscar de novo refaz a proposta e descarta as etiquetas alteradas à mão. Continuar?")) return;
+  buscar(ev.currentTarget);
+});
+
+const buscar = (botao) => comCarregando(botao, async () => {
   const r = await api("/api/triagem", { method: "POST", body: JSON.stringify({ modo }) });
   await atualizarTriagem();
   if (fila.length) abrirDetalhe(fila[0].numero);
+  const barrados = r.duplicados.length + r.invalidos.length;
   toast(r.novos
-    ? `${r.novos} processos lidos no PJe. ${r.duplicados.length} duplicados bloqueados.`
-    : "Nenhum processo novo desde a última triagem.");
-}));
+    ? `${r.novos} processos novos lidos no PJe. ${r.duplicados.length} duplicados bloqueados.`
+    : barrados
+      ? `Nenhum processo novo: ${barrados} já estavam distribuídos ou têm número inválido.`
+      : "Nenhum processo novo desde a última triagem.");
+});
 
 $("#btn-aprovar").addEventListener("click", (ev) => comCarregando(ev.currentTarget, async () => {
   const r = await api("/api/aprovar", { method: "POST" });
@@ -279,7 +351,19 @@ document.addEventListener("change", async (ev) => {
 
 document.addEventListener("click", (ev) => {
   const link = ev.target.closest("[data-abrir]");
-  if (link) { ev.preventDefault(); abrirDetalhe(link.dataset.abrir); return; }
+  if (link) {
+    ev.preventDefault();
+    if (link.closest("#aba-padroes")) mostrarAba("triagem");
+    abrirDetalhe(link.dataset.abrir);
+    return;
+  }
+  const barra = ev.target.closest("[data-filtrar-assunto]");
+  if (barra) {
+    $("#busca-acervo").value = "";
+    $("#filtro-servidor").value = "";
+    mostrarAba("acervo", { assunto: barra.dataset.filtrarAssunto, decisao: barra.dataset.filtrarDecisao });
+    return;
+  }
   if (ev.target.closest("select")) return;
   const alvo = ev.target.closest(".card[data-numero], tr[data-numero]");
   if (!alvo) return;
@@ -291,12 +375,18 @@ document.addEventListener("click", (ev) => {
 document.addEventListener("keydown", (ev) => {
   const c = ev.target.closest?.(".card[data-numero]");
   if (c && ev.key === "Enter") abrirDetalhe(c.dataset.numero);
+  const barra = ev.target.closest?.("[data-filtrar-assunto]");
+  if (barra && ev.key === "Enter") barra.click();
 });
 $("#busca-fila").addEventListener("input", renderFila);
 $("#busca-acervo").addEventListener("input", filtrarAcervo);
 $("#filtro-servidor").addEventListener("change", filtrarAcervo);
+$("#filtro-assunto").addEventListener("change", filtrarAcervo);
+$("#filtro-decisao").addEventListener("change", filtrarAcervo);
 
 atualizarTriagem().then(() => {
   const m = location.hash.match(/^#p=(.+)$/);
   if (m) abrirDetalhe(decodeURIComponent(m[1]));
+  const aba = location.hash.match(/^#aba=(\w+)$/);  // atalho para a demonstração, ex.: #aba=padroes
+  if (aba) mostrarAba(aba[1]);
 });

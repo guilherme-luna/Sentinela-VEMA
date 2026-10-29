@@ -1,35 +1,42 @@
 """API e painel do Sentinela VEMA.  Rodar:  python -m uvicorn app.main:app --reload"""
 import json
 from collections import Counter
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import padroes
 from .config import ACERVO_INICIAL_PATH, PDF_DIR, PLANILHA_PATH, SERVIDORES
 from .conectores.pje_simulado import PJeSimulado
+from .planilha import PlanilhaEmUso
 from .repositorio import Repositorio
 from .servico import Sentinela
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
-app = FastAPI(title="Sentinela VEMA", version="0.1.0")
 repo = Repositorio()
 sentinela = Sentinela(repo, PJeSimulado())
 
 
-@app.on_event("startup")
-def preparar_base():
+@asynccontextmanager
+async def ciclo_de_vida(_app: FastAPI):
     if not ACERVO_INICIAL_PATH.exists():
         raise RuntimeError("Base de demonstração ausente. Rode: python scripts/gerar_dados.py")
-    if not repo.listar("acervo"):
+    if not repo.listar("acervo") or not PLANILHA_PATH.exists():
         sentinela.reiniciar_demo()
+    yield
+
+
+app = FastAPI(title="Sentinela VEMA", version="0.2.0", lifespan=ciclo_de_vida)
 
 
 class Triagem(BaseModel):
-    modo: str = "equilibrado"
+    modo: Literal["equilibrado", "paridade"] = "equilibrado"
 
 
 class Reatribuicao(BaseModel):
@@ -59,15 +66,15 @@ def estado():
 
 @app.post("/api/triagem")
 def executar_triagem(req: Triagem):
-    if req.modo not in ("equilibrado", "paridade"):
-        raise HTTPException(400, "Modo inválido")
     return sentinela.executar_triagem(req.modo)
 
 
 def _resumo(p: dict) -> dict:
+    relacionados = p.get("vinculos", []) + p.get("semelhantes", [])
     return {k: p.get(k) for k in ("numero", "classe", "competencia", "assunto", "data_entrada", "servidor",
-                                   "motivo_distribuicao", "alertas", "apenso_de", "locais")} | {
+                                   "motivo_distribuicao", "alertas", "apenso_de", "locais", "decisao")} | {
         "vinculos": len(p.get("vinculos", [])),
+        "semelhantes_decididos": sum(1 for r in relacionados if r.get("decisao")),
         "partes": [x["nome"] for x in p.get("partes", []) if x["polo"] == "passivo"],
     }
 
@@ -94,7 +101,20 @@ def processo(numero: str):
     p = repo.obter(numero)
     if not p:
         raise HTTPException(404, "Processo não encontrado")
+    # Os vínculos guardam um retrato do momento da triagem; mostra com quem cada um está agora
+    # e a decisão mais recente registrada em cada um.
+    relacionados = p.get("vinculos", []) + p.get("semelhantes", [])
+    for v in relacionados:
+        atual = repo.obter(v["numero"]) or {}
+        v["servidor"] = atual.get("servidor") or v.get("servidor")
+        v["decisao"] = atual.get("decisao") or v.get("decisao")
+    p["padrao"] = padroes.resumir(relacionados)
     return p
+
+
+@app.get("/api/padroes")
+def padroes_do_acervo():
+    return padroes.por_assunto(repo.listar("acervo"))
 
 
 @app.put("/api/propostas/{numero}")
@@ -108,7 +128,10 @@ def reatribuir(numero: str, req: Reatribuicao):
 
 @app.post("/api/aprovar")
 def aprovar():
-    return sentinela.aprovar()
+    try:
+        return sentinela.aprovar()
+    except PlanilhaEmUso as e:
+        raise HTTPException(409, str(e))
 
 
 @app.get("/api/planilha")

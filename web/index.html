@@ -26,6 +26,9 @@
     <button class="item ativo" data-aba="triagem" title="Triagem do dia" aria-label="Triagem do dia">
       <svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V21h-6v-6H9v6H3z"/></svg>
     </button>
+    <button class="item" data-aba="padroes" title="Padrões decisórios do acervo" aria-label="Padrões decisórios do acervo">
+      <svg viewBox="0 0 24 24"><path d="M11 3h2v2.1l5.5 1.4-.5 1.9-1.3-.3L19.5 14a3.5 3.5 0 0 1-7 0l2.6-6.4L13 7.1V19h4v2H7v-2h4V7.1l-2.1.5L11.5 14a3.5 3.5 0 0 1-7 0l2.8-6-1.3.3-.5-1.9L11 5.1zM8 9.6 6.4 13.5h3.2zm8 0-1.6 3.9h3.2z"/></svg>
+    </button>
     <button class="item" data-aba="acervo" title="Acervo distribuído" aria-label="Acervo distribuído">
       <svg viewBox="0 0 24 24"><path d="M4 5h16v3H4zm0 5h16v3H4zm0 5h16v3H4z"/></svg>
     </button>
@@ -106,6 +109,17 @@
       </div>
     </section>
 
+    <!-- ================= PADRÕES DECISÓRIOS ================= -->
+    <section id="aba-padroes" class="aba" hidden>
+      <div class="painel">
+        <div class="painel-cab">
+          <svg viewBox="0 0 24 24"><path d="M4 19h16v2H4zm1-3h3V9H5zm5 0h3V4h-3zm5 0h3v-5h-3z"/></svg>Padrões decisórios do acervo
+        </div>
+        <div class="painel-filtros">Como a vara costuma decidir cada assunto, a partir das decisões já registradas. Clique numa decisão para ver os processos. Histórico para reaproveitar entendimento: quem decide é o juiz.</div>
+        <div class="painel-corpo"><div id="grade-padroes" class="grade-padroes"></div></div>
+      </div>
+    </section>
+
     <!-- ================= ACERVO ================= -->
     <section id="aba-acervo" class="aba" hidden>
       <div class="painel">
@@ -115,10 +129,12 @@
         <div class="painel-filtros filtros">
           <input id="busca-acervo" type="search" placeholder="Número, classe, parte ou local">
           <select id="filtro-servidor"><option value="">Todos os servidores</option></select>
+          <select id="filtro-assunto" aria-label="Assunto"><option value="">Todos os assuntos</option></select>
+          <select id="filtro-decisao" aria-label="Decisão"><option value="">Todas as decisões</option></select>
         </div>
         <div class="painel-corpo sem-pad">
           <table id="tabela-acervo" class="tabela listrada">
-            <thead><tr><th>Processo</th><th>Classe</th><th>Parte(s)</th><th>Local</th><th>Etiqueta</th><th>Recebido</th></tr></thead>
+            <thead><tr><th>Processo</th><th>Classe</th><th>Parte(s)</th><th>Local</th><th>Decisão</th><th>Etiqueta</th><th>Recebido</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>

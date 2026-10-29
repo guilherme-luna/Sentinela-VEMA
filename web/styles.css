@@ -144,7 +144,7 @@ main { flex: 1; min-width: 0; padding: 14px 16px 24px; }
   width: 100%; border: 1px solid #ccc; border-radius: 2px; padding: 5px 8px; background: #fff; font-size: 12px;
 }
 .filtros input { max-width: 320px; }
-.filtros select { max-width: 200px; }
+.filtros select { max-width: 210px; }
 .abas-lista { display: flex; gap: 2px; padding: 0 10px; border-bottom: 1px solid #d6d6d6; }
 .aba-lista {
   border: 0; background: none; padding: 7px 8px; font-size: 11px; text-transform: uppercase;
@@ -242,6 +242,33 @@ a { color: var(--pje-link); }
 }
 .toast.erro { background: #f2dede; color: #a94442; border-color: #e4b9b9; }
 .toast a { color: inherit; font-weight: 700; }
+
+/* ---------- casos semelhantes e padrões decisórios ---------- */
+.pilula.decidido { background: #e6eef6; color: #1f4f7a; }
+.pilula svg { width: 11px; height: 11px; }
+.det-bloco.destaque { background: #f7fbfd; }
+.det-bloco h4 { margin: 12px 0 6px; font-size: 11px; color: var(--texto-2); font-weight: 700; text-transform: uppercase; }
+.det-bloco h4 .qtd { color: var(--texto-3); font-weight: 400; }
+.padrao { border: 1px solid #cfe3ec; background: #fff; border-radius: 3px; padding: 9px 12px; }
+.padrao-frase { margin: 0 0 8px; font-size: 13px; }
+.padrao .aviso { margin: 8px 0 0; font-size: 11px; color: var(--texto-3); }
+.barras-dec { display: flex; flex-direction: column; gap: 5px; }
+.linha-dec { display: grid; grid-template-columns: 150px 1fr 26px; align-items: center; gap: 8px; font-size: 12px; }
+.linha-dec .total { text-align: right; font-variant-numeric: tabular-nums; }
+.linha-dec.clicavel { cursor: pointer; border-radius: 2px; }
+.linha-dec.clicavel:hover .nome { color: var(--pje-link); text-decoration: underline; }
+.decisao { margin-top: 5px; font-size: 12px; }
+.decisao .dec-tipo { font-weight: 700; color: #1f4f7a; margin-right: 6px; }
+.decisao .dec-resumo { color: #444; }
+.decisao.pendente { color: var(--texto-3); font-style: italic; }
+.grade-padroes { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+.cartao-padrao { border: 1px solid #d6d6d6; padding: 12px 14px; }
+.cartao-padrao h3 { margin: 0; font-size: 14px; color: var(--pje-escuro); }
+.cartao-padrao .meta { margin: 2px 0 10px; font-size: 11px; color: var(--texto-3); }
+.cartao-padrao h4 { margin: 12px 0 6px; font-size: 11px; color: var(--texto-2); text-transform: uppercase; }
+.cartao-padrao .rec { border-top: 1px solid #f0f0f0; padding: 6px 0; }
+.cartao-padrao .rec .cab { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--texto-3); }
+.cartao-padrao .rec a { color: var(--pje-link); font-weight: 700; font-size: 12px; text-decoration: none; }
 
 @media (max-width: 1200px) {
   .paineis { grid-template-columns: 1fr; }

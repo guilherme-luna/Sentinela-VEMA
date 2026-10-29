@@ -65,17 +65,38 @@ def _chaves_partes(processo: dict) -> dict[str, str]:
     return chaves
 
 
+def _vetorizador() -> TfidfVectorizer:
+    return TfidfVectorizer(stop_words=STOPWORDS, ngram_range=(1, 2), sublinear_tf=True, preprocessor=_norm)
+
+
 def encontrar(processo: dict, acervo: list[dict], max_resultados: int = 6) -> dict:
-    """Devolve {"vinculos": [...], "semelhantes": [...]}.
+    """Devolve {"vinculos": [...], "semelhantes": [...]} para um processo.
 
     Vínculo (forte): mesma parte, ou mesmo local com assunto semelhante — indica
     conexão real entre os casos. Semelhante: só o assunto parece, útil para
     reaproveitar entendimento e minutas.
     """
-    outros = [p for p in acervo if p["numero"] != processo["numero"]]
-    if not outros:
-        return {"vinculos": [], "semelhantes": []}
+    return encontrar_lote([processo], acervo, max_resultados)[0]
 
+
+def encontrar_lote(processos: list[dict], base: list[dict], max_resultados: int = 6) -> list[dict]:
+    """Vínculos de vários processos contra a mesma base, ajustando o TF-IDF uma única vez."""
+    base = list({p["numero"]: p for p in base + processos}.values())
+    indice = {p["numero"]: i for i, p in enumerate(base)}
+    corpus = [p.get("sintese", "") for p in base]
+    matriz = _vetorizador().fit_transform(corpus) if any(corpus) else None
+    resultado = []
+    for processo in processos:
+        sims = {}
+        if matriz is not None:
+            linha = cosine_similarity(matriz[indice[processo["numero"]]], matriz).ravel()
+            sims = {p["numero"]: float(linha[i]) for i, p in enumerate(base)}
+        resultado.append(_avaliar(processo, base, sims, max_resultados))
+    return resultado
+
+
+def _avaliar(processo: dict, base: list[dict], sims: dict[str, float], max_resultados: int) -> dict:
+    outros = [p for p in base if p["numero"] != processo["numero"]]
     achados: dict[str, dict] = {}
 
     def add(numero: str, criterio: str, detalhe: str, peso: float):
@@ -84,35 +105,26 @@ def encontrar(processo: dict, acervo: list[dict], max_resultados: int = 6) -> di
         v["score"] += peso
 
     minhas_partes = _chaves_partes(processo)
-    meus_locais = set(processo.get("locais") or locais_citados(processo.get("texto", "")))
+    meus_locais = set(processo.get("locais") or locais_citados(processo.get("sintese", "")))
 
     for p in outros:
-        comuns = set(minhas_partes) & set(_chaves_partes(p))
-        for chave in comuns:
+        for chave in set(minhas_partes) & set(_chaves_partes(p)):
             add(p["numero"], "mesma_parte", f"Mesma parte: {minhas_partes[chave]}", 1.0)
-        locais = meus_locais & set(p.get("locais") or [])
-        for local in sorted(locais):
+        for local in sorted(meus_locais & set(p.get("locais") or [])):
             add(p["numero"], "mesmo_local", f"Mesmo local: {local}", 0.8)
-
-    # Assunto semelhante: TF-IDF sobre a síntese dos fatos.
-    corpus = [processo.get("sintese", "")] + [p.get("sintese", "") for p in outros]
-    if any(corpus):
-        vet = TfidfVectorizer(stop_words=STOPWORDS, ngram_range=(1, 2), sublinear_tf=True, preprocessor=_norm)
-        matriz = vet.fit_transform(corpus)
-        sims = cosine_similarity(matriz[0], matriz[1:]).ravel()
-        for p, s in zip(outros, sims):
-            if s >= LIMIAR_SIMILARIDADE:
-                add(p["numero"], "assunto_semelhante", f"Assunto semelhante ({s:.0%} de similaridade)", float(s))
+        s = sims.get(p["numero"], 0.0)
+        if s >= LIMIAR_SIMILARIDADE:
+            add(p["numero"], "assunto_semelhante", f"Assunto semelhante ({s:.0%} de similaridade)", s)
 
     por_numero = {p["numero"]: p for p in outros}
     vinculos, semelhantes = [], []
     for v in sorted(achados.values(), key=lambda v: v["score"], reverse=True):
         p = por_numero[v["numero"]]
         v.update(classe=p.get("classe"), servidor=p.get("servidor"), assunto=p.get("assunto"),
-                 score=round(v["score"], 2))
+                 decisao=p.get("decisao"), score=round(v["score"], 2))
         tipos = {c["tipo"] for c in v["criterios"]}
         if "mesma_parte" in tipos or {"mesmo_local", "assunto_semelhante"} <= tipos:
             vinculos.append(v)
         elif "assunto_semelhante" in tipos:
             semelhantes.append(v)
-    return {"vinculos": vinculos[:max_resultados], "semelhantes": semelhantes[:3]}
+    return {"vinculos": vinculos[:max_resultados], "semelhantes": semelhantes[:5]}
